@@ -9,27 +9,35 @@
     <style>
         :root { --brand-green: #005a32; --alert-red: #b30000; --bg: #fdfdfd; }
         body { font-family: -apple-system, system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: var(--bg); color: #333; overflow: hidden; text-align: center; }
-        .progress-container { width: 70%; height: 6px; background: #eee; border-radius: 10px; margin: 20px auto; overflow: hidden; display: none; }
-        #progress-bar { width: 0%; height: 100%; background: var(--brand-green); transition: width 0.4s ease; }
+        
+        /* Progress Bar Styling */
+        .progress-container { width: 70%; height: 8px; background: #eee; border-radius: 10px; margin: 20px auto; overflow: hidden; }
+        #progress-bar { width: 0%; height: 100%; background: var(--brand-green); transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .loading-text { font-size: 14px; color: #888; letter-spacing: 0.5px; font-weight: 500; }
+
         .compass-container { position: relative; width: 240px; height: 240px; margin: 30px auto; display: flex; align-items: center; justify-content: center; border: 4px solid #eee; border-radius: 50%; }
-        #needle-pivot { position: absolute; width: 40px; height: 200px; transform-origin: center center; display: flex; flex-direction: column; align-items: center; transition: none; }
+        #needle-pivot { position: absolute; width: 40px; height: 200px; transform-origin: center center; display: flex; flex-direction: column; align-items: center; }
         #needle-north { width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-bottom: 100px solid var(--brand-green) !important; }
         #needle-south { width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 100px solid #ccc; }
-        .btn { background: var(--brand-green); color: white; border: none; padding: 18px 40px; border-radius: 50px; font-size: 20px; font-weight: 600; cursor: pointer; }
+        
+        .btn { background: var(--brand-green); color: white; border: none; padding: 18px 40px; border-radius: 50px; font-size: 20px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         #happiness-status { font-size: 24px; font-weight: 700; color: var(--brand-green); }
         #distance { font-size: 18px; color: #666; margin-top: 5px; }
         #hours { font-size: 13px; background: #eee; padding: 6px 12px; border-radius: 12px; margin-top: 15px; display: inline-block; }
     </style>
 </head>
 <body>
+
     <div id="ui-init">
         <h1 style="color:var(--brand-green); margin-bottom: 30px;">Bolaget Finder</h1>
         <button class="btn" onclick="startApp()">FIND HAPPINESS</button>
     </div>
+
     <div id="ui-seeking" style="display:none;">
-        <div id="status-msg" style="color:#888;">Locating you...</div>
-        <div class="progress-container" style="display:block;"><div id="progress-bar"></div></div>
+        <div id="status-msg" class="loading-text">Requesting Permissions...</div>
+        <div class="progress-container"><div id="progress-bar"></div></div>
     </div>
+
     <div id="ui-compass" style="display:none;">
         <div id="happiness-status">Happiness found!</div>
         <div id="distance">...</div>
@@ -45,21 +53,50 @@
         let integral = 0; let lastError = 0;
         const Kp = 0.15; const Ki = 0.001; const Kd = 0.45;
 
+        function updateProgress(percent, message) {
+            document.getElementById('progress-bar').style.width = percent + '%';
+            document.getElementById('status-msg').innerText = message.toUpperCase();
+        }
+
         async function startApp() {
             document.getElementById('ui-init').style.display = 'none';
             document.getElementById('ui-seeking').style.display = 'block';
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                await fetchNearestBolaget(userLoc.lat, userLoc.lng);
-                requestAnimationFrame(pidLoop);
-            }, () => alert("GPS error"), { enableHighAccuracy: true });
+            
+            updateProgress(10, "Initializing Sensors...");
 
+            // Permission check for iOS
             if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                 const res = await DeviceOrientationEvent.requestPermission();
-                if (res === 'granted') window.addEventListener('deviceorientation', handleOrientation);
-            } else {
-                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                if (res !== 'granted') {
+                    alert("Compass permission denied.");
+                    return;
+                }
             }
+
+            updateProgress(30, "Locking GPS Coordinates...");
+            
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                
+                updateProgress(50, "Querying Happiness Map...");
+                await fetchNearestBolaget(userLoc.lat, userLoc.lng);
+                
+                updateProgress(90, "Tuning PID Controller...");
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                window.addEventListener('deviceorientation', handleOrientation, true);
+                
+                // Final slight delay to show 100% and then reveal compass
+                setTimeout(() => {
+                    updateProgress(100, "Done!");
+                    document.getElementById('ui-seeking').style.display = 'none';
+                    document.getElementById('ui-compass').style.display = 'block';
+                    requestAnimationFrame(pidLoop);
+                }, 600);
+
+            }, (err) => {
+                alert("GPS error: " + err.message);
+                location.reload();
+            }, { enableHighAccuracy: true });
         }
 
         async function fetchNearestBolaget(lat, lng) {
@@ -67,22 +104,25 @@
             try {
                 const response = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
                 const data = await response.json();
-                if (data.elements.length > 0) {
+                
+                updateProgress(75, "Sorting Results...");
+
+                if (data.elements && data.elements.length > 0) {
                     let minD = Infinity;
                     data.elements.forEach(el => {
                         const d = getDistance(lat, lng, el.lat, el.lon);
                         if (d < minD) { minD = d; nearestStore = el; }
                     });
-                    document.getElementById('ui-seeking').style.display = 'none';
-                    document.getElementById('ui-compass').style.display = 'block';
                     updateUI(minD);
+                } else {
+                    document.getElementById('status-msg').innerText = "HAPPINESS IS TOO FAR (>25KM)";
                 }
-            } catch (e) { alert("Search failed"); }
+            } catch (e) { alert("Search failed: Network error"); }
         }
 
         function updateUI(dist) {
             document.getElementById('distance').innerText = `Happiness is ${dist.toFixed(1)}km away.`;
-            document.getElementById('hours').innerText = `Open: ${nearestStore.tags.opening_hours || 'Unknown'}`;
+            document.getElementById('hours').innerText = `Open: ${nearestStore.tags.opening_hours || 'Check store website'}`;
         }
 
         function handleOrientation(e) {
@@ -95,7 +135,7 @@
         function pidLoop() {
             let error = targetRotation - currentRotation;
             while (error <= -180) error += 360; while (error > 180) error -= 360;
-            integral = (integral + error) * 0.9; // Small decay to prevent integral windup
+            integral = (integral + error) * 0.9;
             let derivative = error - lastError;
             let output = (Kp * error) + (Ki * integral) + (Kd * derivative);
             currentRotation += output;
@@ -116,6 +156,8 @@
             const x = Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180) - Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLon);
             return (Math.atan2(y, x)*180/Math.PI + 360) % 360;
         }
+
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
     </script>
 </body>
 </html>
