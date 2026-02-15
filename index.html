@@ -17,9 +17,10 @@
         /* Modal Styling */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; align-items: center; justify-content: center; }
         .modal.show { display: flex; }
-        .modal-content { background: white; padding: 30px; border-radius: 20px; max-width: 400px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
-        .modal-header { font-size: 22px; font-weight: 700; color: var(--brand-green); margin-bottom: 20px; }
-        .modal-close { position: absolute; top: 15px; right: 15px; font-size: 30px; color: #999; cursor: pointer; background: none; border: none; }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; max-width: 400px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.3); position: relative; }
+        .modal-header { font-size: 22px; font-weight: 700; color: var(--brand-green); margin-bottom: 20px; padding-right: 30px; }
+        .modal-close { position: absolute; top: 10px; right: 10px; font-size: 28px; color: #999; cursor: pointer; background: none; border: none; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s; }
+        .modal-close:hover { background: #f0f0f0; color: #333; }
         .modal-step { text-align: left; margin: 15px 0; padding: 12px; background: #f8f8f8; border-radius: 8px; }
         .modal-step-num { display: inline-block; background: var(--brand-green); color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; margin-right: 8px; font-weight: 600; font-size: 14px; }
         .modal-icon { font-size: 18px; margin: 0 4px; }
@@ -48,6 +49,7 @@
     <!-- Install Instructions Modal -->
     <div id="install-modal" class="modal" onclick="closeInstallModal(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeInstallModal()">&times;</button>
             <div class="modal-header">Install Bolaget Finder</div>
             <div id="install-instructions"></div>
         </div>
@@ -88,7 +90,7 @@
         }
 
         function closeInstallModal(event) {
-            if (event && event.target.className !== 'modal') return;
+            if (event && event.target.id !== 'install-modal') return;
             document.getElementById('install-modal').classList.remove('show');
         }
 
