@@ -1,6 +1,6 @@
 {
   "name": "Happiness Finder",
-  "short_name": "Happiness",
+  "short_name": "Happiness Finder",
   "description": "Locate the nearest Systembolaget in Sweden.",
   "start_url": "index.html",
   "display": "standalone",
@@ -10,7 +10,7 @@
   "icons": [
     {
       "src": "icon.png",
-      "sizes": "240x240",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }

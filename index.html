@@ -50,13 +50,13 @@
     <div id="install-modal" class="modal" onclick="closeInstallModal(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
             <button class="modal-close" onclick="closeInstallModal()">&times;</button>
-            <div class="modal-header">Install Bolaget Finder</div>
+            <div class="modal-header">Install Happiness Finder</div>
             <div id="install-instructions"></div>
         </div>
     </div>
 
     <div id="ui-init">
-        <h1 style="color:var(--brand-green); margin-bottom: 30px;">Bolaget Finder</h1>
+        <h1 style="color:var(--brand-green); margin-bottom: 30px;">Happiness Finder</h1>
         <button class="btn" onclick="startApp()">FIND HAPPINESS</button>
     </div>
 
@@ -80,6 +80,7 @@
         let integral = 0; let lastError = 0;
         let geoWatchId = null;
         let compassCalibrated = false;
+        let isStoreClosed = false;
         const Kp = 0.15; const Ki = 0.001; const Kd = 0.45;
 
         function showInstallModal() {
@@ -221,6 +222,61 @@
             } catch (e) { alert("Search failed: Network error"); }
         }
 
+        function isStoreOpen(openingHours) {
+            if (!openingHours || openingHours === 'Unknown') return null; // Unknown status
+            
+            const now = new Date();
+            const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+            const today = dayNames[now.getDay()];
+            const currentTime = now.getHours() * 60 + now.getMinutes();
+            
+            try {
+                // Parse common opening_hours formats like "Mo-Fr 10:00-19:00; Sa 10:00-15:00"
+                const parts = openingHours.split(';').map(p => p.trim());
+                
+                for (const part of parts) {
+                    // Check if today matches this rule
+                    const match = part.match(/^([A-Za-z,-]+)\s+(\d{1,2}:\d{2})-(\d{1,2}:\d{2})/);
+                    if (!match) continue;
+                    
+                    const [, days, openTime, closeTime] = match;
+                    
+                    // Check if today is in the day range
+                    let dayMatches = false;
+                    if (days.includes('-')) {
+                        const [startDay, endDay] = days.split('-');
+                        const startIdx = dayNames.indexOf(startDay);
+                        const endIdx = dayNames.indexOf(endDay);
+                        const todayIdx = dayNames.indexOf(today);
+                        dayMatches = todayIdx >= startIdx && todayIdx <= endIdx;
+                    } else if (days.includes(',')) {
+                        dayMatches = days.split(',').some(d => d.trim() === today);
+                    } else {
+                        dayMatches = days === today;
+                    }
+                    
+                    if (dayMatches) {
+                        // Parse time
+                        const [openH, openM] = openTime.split(':').map(Number);
+                        const [closeH, closeM] = closeTime.split(':').map(Number);
+                        const openMinutes = openH * 60 + openM;
+                        const closeMinutes = closeH * 60 + closeM;
+                        
+                        return currentTime >= openMinutes && currentTime < closeMinutes;
+                    }
+                }
+                
+                // Check for "off" or closed
+                if (openingHours.toLowerCase().includes('off') || openingHours.toLowerCase().includes(today.toLowerCase() + ' off')) {
+                    return false;
+                }
+                
+                return null; // Can't determine
+            } catch (e) {
+                return null; // Parse error, can't determine
+            }
+        }
+
         function updateDistanceDisplay(dist) {
             if (dist < 1) {
                 document.getElementById('distance').innerText = `Happiness is ${(dist * 1000).toFixed(0)}m away.`;
@@ -231,7 +287,26 @@
 
         function updateUI(dist) {
             updateDistanceDisplay(dist);
-            document.getElementById('hours').innerText = `Open: ${nearestStore.tags.opening_hours || 'Check store website'}`;
+            const openingHours = nearestStore.tags.opening_hours || 'Check store website';
+            const open = isStoreOpen(openingHours);
+            
+            if (open === false) {
+                isStoreClosed = true;
+                document.getElementById('happiness-status').innerText = 'Happiness is closed';
+                document.getElementById('happiness-status').style.color = 'var(--alert-red)';
+                document.getElementById('needle-north').style.borderBottomColor = 'var(--alert-red)';
+                document.getElementById('hours').innerText = `Closed - ${openingHours}`;
+            } else {
+                isStoreClosed = false;
+                document.getElementById('happiness-status').innerText = 'Happiness found!';
+                document.getElementById('happiness-status').style.color = 'var(--brand-green)';
+                document.getElementById('needle-north').style.borderBottomColor = 'var(--brand-green)';
+                if (open === true) {
+                    document.getElementById('hours').innerText = `Open - ${openingHours}`;
+                } else {
+                    document.getElementById('hours').innerText = `Hours: ${openingHours}`;
+                }
+            }
         }
 
         function handleOrientation(e) {
