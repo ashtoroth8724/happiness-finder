@@ -34,6 +34,7 @@
             transition: transform 0.2s ease-out;
             transform-origin: center center; 
             display: flex; flex-direction: column; align-items: center;
+            transition: transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
         }
 
         #needle-north {
@@ -176,30 +177,42 @@
             }
         }
 
+        let lastAppliedRotation = 0;
+
         function handleOrientation(e) {
             if (!userLoc || !nearestStore) return;
             
-            // Standardizing heading across browsers
+            // 1. Get the raw heading based on device type
             let heading = 0;
             if (e.webkitCompassHeading) {
-                heading = e.webkitCompassHeading; // iOS
+                heading = e.webkitCompassHeading; 
             } else if (e.absolute && e.alpha !== null) {
-                heading = 360 - e.alpha; // Android Chrome/Firefox Absolute
+                heading = 360 - e.alpha; 
             } else if (e.alpha !== null) {
-                heading = 360 - e.alpha; // Fallback
+                heading = 360 - e.alpha;
             }
 
-            // Smoothing filter
+            // 2. Calculate the shortest path (to prevent the needle spinning 360 degrees)
             let diff = heading - smoothedHeading;
-            if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
-            smoothedHeading += diff * 0.15; 
+            if (diff > 180) diff -= 360; 
+            if (diff < -180) diff += 360;
 
-            // Calculate bearing to store
+            // 3. LOW-PASS FILTER: We only take 5% of the new data (0.05)
+            // This makes the needle move like it's in thick honey.
+            smoothedHeading += diff * 0.05; 
+
+            // 4. Calculate bearing to destination
             const bearing = getBearing(userLoc.lat, userLoc.lng, nearestStore.lat, nearestStore.lon);
             
-            // The needle should point: (Bearing to Store) - (Current Phone Heading)
-            const rotation = bearing - smoothedHeading;
-            document.getElementById('needle-pivot').style.transform = `rotate(${rotation}deg)`;
+            // 5. Calculate final rotation
+            let targetRotation = bearing - smoothedHeading;
+
+            // 6. SNAP FILTER: Only update the CSS if the change is noticeable (> 1.5 degrees)
+            // This stops the "vibrating" look when you are standing still.
+            if (Math.abs(targetRotation - lastAppliedRotation) > 1.5) {
+                document.getElementById('needle-pivot').style.transform = `rotate(${targetRotation}deg)`;
+                lastAppliedRotation = targetRotation;
+            }
         }
 
         function getDistance(lat1, lon1, lat2, lon2) {
