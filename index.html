@@ -31,8 +31,7 @@
         #needle-pivot {
             position: absolute;
             width: 40px; height: 200px;
-            /* Smoothing transition: 0.3s provides a 'heavy' mechanical feel */
-            transition: transform 0.3s ease-out;
+            transition: transform 0.2s ease-out;
             transform-origin: center center; 
             display: flex; flex-direction: column; align-items: center;
         }
@@ -41,7 +40,8 @@
             width: 0; height: 0;
             border-left: 15px solid transparent;
             border-right: 15px solid transparent;
-            border-bottom: 100px solid var(--brand-green);
+            /* FORCING GREEN COLOR HERE */
+            border-bottom: 100px solid var(--brand-green) !important;
         }
 
         #needle-south {
@@ -51,8 +51,7 @@
             border-top: 100px solid #ccc;
         }
 
-        /* UI Elements */
-        .btn { background: var(--brand-green); color: white; border: none; padding: 18px 40px; border-radius: 50px; font-size: 20px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .btn { background: var(--brand-green); color: white; border: none; padding: 18px 40px; border-radius: 50px; font-size: 20px; font-weight: 600; cursor: pointer; }
         #happiness-status { font-size: 24px; font-weight: 700; color: var(--brand-green); }
         #distance { font-size: 18px; color: #666; margin-top: 5px; }
         #hours { font-size: 13px; background: #eee; padding: 6px 12px; border-radius: 12px; margin-top: 15px; display: inline-block; }
@@ -99,8 +98,8 @@
         let userLoc = null; 
         let nearestStore = null; 
         let smoothedHeading = 0;
-        let lastRawHeading = 0;
 
+        // INSTALL MODAL LOGIC
         window.onload = () => {
             if (!window.matchMedia('(display-mode: standalone)').matches && !localStorage.getItem('pwa_prompt_dismissed')) {
                 showInstallInstructions();
@@ -133,13 +132,15 @@
                 document.getElementById('progress-bar').style.width = '60%';
                 document.getElementById('status-msg').innerText = "Scanning map...";
                 await fetchNearestBolaget(userLoc.lat, userLoc.lng);
-            }, () => alert("GPS failed."), { enableHighAccuracy: true });
+            }, () => alert("GPS failed. Ensure location is on."), { enableHighAccuracy: true });
 
             if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                 const res = await DeviceOrientationEvent.requestPermission();
                 if (res === 'granted') window.addEventListener('deviceorientation', handleOrientation);
             } else {
                 window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                // Also listen for regular orientation as fallback
+                window.addEventListener('deviceorientation', handleOrientation, true);
             }
         }
 
@@ -166,28 +167,39 @@
         function updateUI(dist) {
             document.getElementById('distance').innerText = `Happiness is ${dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km'} away.`;
             document.getElementById('hours').innerText = `Hours: ${nearestStore.hours}`;
+            
+            // Check if Sunday - only change color IF it is actually Sunday
             if (new Date().getDay() === 0) {
                 document.getElementById('hours').innerText = "Closed (Sunday).";
-                document.getElementById('needle-north').style.borderBottomColor = 'var(--alert-red)';
+                document.getElementById('hours').style.color = 'var(--alert-red)';
+                document.getElementById('needle-north').style.setProperty('border-bottom-color', 'var(--alert-red)', 'important');
             }
         }
 
         function handleOrientation(e) {
             if (!userLoc || !nearestStore) return;
-            let rawHeading = e.webkitCompassHeading || (e.absolute ? e.alpha : (360 - e.alpha));
-            if (rawHeading === undefined) return;
+            
+            // Standardizing heading across browsers
+            let heading = 0;
+            if (e.webkitCompassHeading) {
+                heading = e.webkitCompassHeading; // iOS
+            } else if (e.absolute && e.alpha !== null) {
+                heading = 360 - e.alpha; // Android Chrome/Firefox Absolute
+            } else if (e.alpha !== null) {
+                heading = 360 - e.alpha; // Fallback
+            }
 
-            // Jitter Filter: Only update if movement > 1 degree
-            if (Math.abs(rawHeading - lastRawHeading) < 1) return;
-            lastRawHeading = rawHeading;
-
-            let diff = rawHeading - smoothedHeading;
+            // Smoothing filter
+            let diff = heading - smoothedHeading;
             if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
-            // Lower value (0.1) = smoother but slower. Higher = faster but jumpier.
-            smoothedHeading += diff * 0.12; 
+            smoothedHeading += diff * 0.15; 
 
+            // Calculate bearing to store
             const bearing = getBearing(userLoc.lat, userLoc.lng, nearestStore.lat, nearestStore.lon);
-            document.getElementById('needle-pivot').style.transform = `rotate(${bearing - smoothedHeading}deg)`;
+            
+            // The needle should point: (Bearing to Store) - (Current Phone Heading)
+            const rotation = bearing - smoothedHeading;
+            document.getElementById('needle-pivot').style.transform = `rotate(${rotation}deg)`;
         }
 
         function getDistance(lat1, lon1, lat2, lon2) {
