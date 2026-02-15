@@ -15,53 +15,49 @@
             height: 100vh; margin: 0; background: var(--bg); color: #333; overflow: hidden; text-align: center;
         }
 
-        /* Progress Bar */
+        /* Progress UI */
         .progress-container { width: 70%; height: 6px; background: #eee; border-radius: 10px; margin: 20px auto; overflow: hidden; display: none; }
         #progress-bar { width: 0%; height: 100%; background: var(--brand-green); transition: width 0.4s ease; }
         .loading { animation: pulse 1.5s infinite; color: #888; font-size: 14px; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-        /* FIXED COMPASS NEEDLE */
+        /* COMPASS NEEDLE */
         .compass-container {
-            position: relative;
-            width: 200px;
-            height: 200px;
-            margin: 30px auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            position: relative; width: 240px; height: 240px;
+            margin: 30px auto; display: flex; align-items: center; justify-content: center;
+            border: 4px solid #eee; border-radius: 50%;
         }
         
         #needle-pivot {
-            position: relative;
-            width: 40px;
-            height: 200px;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            /* This ensures it rotates around its true center point */
+            position: absolute;
+            width: 40px; height: 200px;
+            /* Smoothing transition: 0.3s provides a 'heavy' mechanical feel */
+            transition: transform 0.3s ease-out;
             transform-origin: center center; 
+            display: flex; flex-direction: column; align-items: center;
         }
 
         #needle-north {
             width: 0; height: 0;
-            border-left: 20px solid transparent;
-            border-right: 20px solid transparent;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
             border-bottom: 100px solid var(--brand-green);
         }
 
         #needle-south {
             width: 0; height: 0;
-            border-left: 20px solid transparent;
-            border-right: 20px solid transparent;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
             border-top: 100px solid #ccc;
         }
 
-        /* Buttons & UI */
+        /* UI Elements */
         .btn { background: var(--brand-green); color: white; border: none; padding: 18px 40px; border-radius: 50px; font-size: 20px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         #happiness-status { font-size: 24px; font-weight: 700; color: var(--brand-green); }
         #distance { font-size: 18px; color: #666; margin-top: 5px; }
         #hours { font-size: 13px; background: #eee; padding: 6px 12px; border-radius: 12px; margin-top: 15px; display: inline-block; }
 
-        /* Install Modal */
+        /* Modal */
         #install-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
         .modal-content { background: white; padding: 30px; border-radius: 20px; max-width: 80%; text-align: left; }
         .close-modal { background: #eee; border: none; padding: 12px; border-radius: 10px; margin-top: 20px; width: 100%; font-weight: bold; }
@@ -103,8 +99,8 @@
         let userLoc = null; 
         let nearestStore = null; 
         let smoothedHeading = 0;
+        let lastRawHeading = 0;
 
-        // PWA Modal Logic
         window.onload = () => {
             if (!window.matchMedia('(display-mode: standalone)').matches && !localStorage.getItem('pwa_prompt_dismissed')) {
                 showInstallInstructions();
@@ -126,28 +122,24 @@
             localStorage.setItem('pwa_prompt_dismissed', 'true');
         }
 
-        function setProgress(percent, msg) {
-            document.getElementById('progress-bar').style.width = percent + '%';
-            document.getElementById('status-msg').innerText = msg;
-        }
-
         async function startApp() {
             document.getElementById('ui-init').style.display = 'none';
             document.getElementById('ui-seeking').style.display = 'block';
-            setProgress(20, "Locating you...");
+            document.getElementById('progress-bar').style.width = '20%';
+            document.getElementById('status-msg').innerText = "Locating you...";
 
             navigator.geolocation.getCurrentPosition(async (pos) => {
                 userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                setProgress(60, "Scanning map...");
+                document.getElementById('progress-bar').style.width = '60%';
+                document.getElementById('status-msg').innerText = "Scanning map...";
                 await fetchNearestBolaget(userLoc.lat, userLoc.lng);
-            }, () => alert("GPS failed. Ensure location is on."), { enableHighAccuracy: true });
+            }, () => alert("GPS failed."), { enableHighAccuracy: true });
 
             if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                 const res = await DeviceOrientationEvent.requestPermission();
                 if (res === 'granted') window.addEventListener('deviceorientation', handleOrientation);
             } else {
                 window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-                window.addEventListener('deviceorientation', handleOrientation, true);
             }
         }
 
@@ -182,13 +174,17 @@
 
         function handleOrientation(e) {
             if (!userLoc || !nearestStore) return;
-            // Standardizing heading for Chrome, Firefox, and Safari
             let rawHeading = e.webkitCompassHeading || (e.absolute ? e.alpha : (360 - e.alpha));
             if (rawHeading === undefined) return;
 
+            // Jitter Filter: Only update if movement > 1 degree
+            if (Math.abs(rawHeading - lastRawHeading) < 1) return;
+            lastRawHeading = rawHeading;
+
             let diff = rawHeading - smoothedHeading;
             if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
-            smoothedHeading += diff * 0.15;
+            // Lower value (0.1) = smoother but slower. Higher = faster but jumpier.
+            smoothedHeading += diff * 0.12; 
 
             const bearing = getBearing(userLoc.lat, userLoc.lng, nearestStore.lat, nearestStore.lon);
             document.getElementById('needle-pivot').style.transform = `rotate(${bearing - smoothedHeading}deg)`;
