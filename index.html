@@ -52,6 +52,7 @@
         let currentRotation = 0; let targetRotation = 0;
         let integral = 0; let lastError = 0;
         let geoWatchId = null;
+        let compassCalibrated = false;
         const Kp = 0.15; const Ki = 0.001; const Kd = 0.45;
 
         function updateProgress(percent, message) {
@@ -146,6 +147,28 @@
 
         function handleOrientation(e) {
             if (!userLoc || !nearestStore) return;
+            
+            // Check compass accuracy (iOS)
+            if (e.webkitCompassAccuracy && e.webkitCompassAccuracy < 0) {
+                if (!compassCalibrated) {
+                    document.getElementById('happiness-status').innerText = 'Calibrate compass!';
+                    document.getElementById('distance').innerText = 'Move phone in figure-8 motion';
+                    compassCalibrated = true;
+                }
+                return;
+            }
+            
+            // Warn on low accuracy
+            if (e.webkitCompassAccuracy && e.webkitCompassAccuracy > 25) {
+                if (!compassCalibrated) {
+                    document.getElementById('happiness-status').innerText = 'Low accuracy - calibrate!';
+                    compassCalibrated = true;
+                }
+            } else if (compassCalibrated) {
+                document.getElementById('happiness-status').innerText = 'Happiness found!';
+                compassCalibrated = false;
+            }
+            
             let heading = e.webkitCompassHeading || (e.absolute ? 360 - e.alpha : 360 - e.alpha);
             const bearing = getBearing(userLoc.lat, userLoc.lng, nearestStore.lat, nearestStore.lon);
             targetRotation = bearing - heading;
