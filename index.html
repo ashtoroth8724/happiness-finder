@@ -10,6 +10,20 @@
         :root { --brand-green: #005a32; --alert-red: #b30000; --bg: #fdfdfd; }
         body { font-family: -apple-system, system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: var(--bg); color: #333; overflow: hidden; text-align: center; }
         
+        /* Download Button */
+        .install-btn { position: fixed; top: 20px; right: 20px; background: var(--brand-green); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; font-size: 24px; z-index: 1000; }
+        .install-btn:hover { transform: scale(1.05); }
+        
+        /* Modal Styling */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; max-width: 400px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+        .modal-header { font-size: 22px; font-weight: 700; color: var(--brand-green); margin-bottom: 20px; }
+        .modal-close { position: absolute; top: 15px; right: 15px; font-size: 30px; color: #999; cursor: pointer; background: none; border: none; }
+        .modal-step { text-align: left; margin: 15px 0; padding: 12px; background: #f8f8f8; border-radius: 8px; }
+        .modal-step-num { display: inline-block; background: var(--brand-green); color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; margin-right: 8px; font-weight: 600; font-size: 14px; }
+        .modal-icon { font-size: 18px; margin: 0 4px; }
+        
         /* Progress Bar Styling */
         .progress-container { width: 70%; height: 8px; background: #eee; border-radius: 10px; margin: 20px auto; overflow: hidden; }
         #progress-bar { width: 0%; height: 100%; background: var(--brand-green); transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -27,6 +41,17 @@
     </style>
 </head>
 <body>
+
+    <!-- Install Button -->
+    <button class="install-btn" onclick="showInstallModal()" title="Install App">⬇</button>
+
+    <!-- Install Instructions Modal -->
+    <div id="install-modal" class="modal" onclick="closeInstallModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">Install Bolaget Finder</div>
+            <div id="install-instructions"></div>
+        </div>
+    </div>
 
     <div id="ui-init">
         <h1 style="color:var(--brand-green); margin-bottom: 30px;">Bolaget Finder</h1>
@@ -54,6 +79,68 @@
         let geoWatchId = null;
         let compassCalibrated = false;
         const Kp = 0.15; const Ki = 0.001; const Kd = 0.45;
+
+        function showInstallModal() {
+            const modal = document.getElementById('install-modal');
+            const instructions = document.getElementById('install-instructions');
+            instructions.innerHTML = getInstallInstructions();
+            modal.classList.add('show');
+        }
+
+        function closeInstallModal(event) {
+            if (event && event.target.className !== 'modal') return;
+            document.getElementById('install-modal').classList.remove('show');
+        }
+
+        function getInstallInstructions() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const isAndroid = /Android/.test(navigator.userAgent);
+            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+            const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+            const isFirefox = /Firefox/.test(navigator.userAgent);
+            
+            if (isIOS && isSafari) {
+                return `
+                    <div class="modal-step"><span class="modal-step-num">1</span>Tap the <strong>Share</strong> button <span class="modal-icon">⎘</span> (at the bottom or top)</div>
+                    <div class="modal-step"><span class="modal-step-num">2</span>Scroll down and tap <strong>"Add to Home Screen"</strong> <span class="modal-icon">➕</span></div>
+                    <div class="modal-step"><span class="modal-step-num">3</span>Tap <strong>"Add"</strong> in the top right corner</div>
+                    <div class="modal-step"><span class="modal-step-num">4</span>The app will appear on your home screen!</div>
+                `;
+            } else if (isIOS) {
+                return `
+                    <p style="color: #666; margin-bottom: 15px;">For the best experience on iPhone/iPad, please open this page in <strong>Safari</strong> browser.</p>
+                    <div class="modal-step">Safari provides full support for installing this app to your home screen.</div>
+                `;
+            } else if (isAndroid && isChrome) {
+                return `
+                    <div class="modal-step"><span class="modal-step-num">1</span>Tap the <strong>menu</strong> button <span class="modal-icon">⋮</span> (three dots in top right)</div>
+                    <div class="modal-step"><span class="modal-step-num">2</span>Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></div>
+                    <div class="modal-step"><span class="modal-step-num">3</span>Tap <strong>"Add"</strong> or <strong>"Install"</strong></div>
+                    <div class="modal-step"><span class="modal-step-num">4</span>The app will appear on your home screen!</div>
+                `;
+            } else if (isAndroid && isFirefox) {
+                return `
+                    <div class="modal-step"><span class="modal-step-num">1</span>Tap the <strong>menu</strong> button <span class="modal-icon">⋮</span> (three dots in top right)</div>
+                    <div class="modal-step"><span class="modal-step-num">2</span>Tap <strong>"Install"</strong> or <strong>"Add to Home screen"</strong></div>
+                    <div class="modal-step"><span class="modal-step-num">3</span>Confirm by tapping <strong>"Add"</strong></div>
+                    <div class="modal-step"><span class="modal-step-num">4</span>Launch from your home screen anytime!</div>
+                `;
+            } else if (isAndroid) {
+                return `
+                    <div class="modal-step"><span class="modal-step-num">1</span>Open your browser's <strong>menu</strong> (usually <span class="modal-icon">⋮</span> three dots)</div>
+                    <div class="modal-step"><span class="modal-step-num">2</span>Look for <strong>"Add to Home screen"</strong> or <strong>"Install"</strong></div>
+                    <div class="modal-step"><span class="modal-step-num">3</span>Confirm the installation</div>
+                    <div class="modal-step"><span class="modal-step-num">4</span>Open the app from your home screen!</div>
+                `;
+            } else {
+                return `
+                    <div class="modal-step"><span class="modal-step-num">1</span>Look for an <strong>install button</strong> in your browser's address bar</div>
+                    <div class="modal-step"><span class="modal-step-num">2</span>Or open the browser menu and select <strong>"Install app"</strong></div>
+                    <div class="modal-step"><span class="modal-step-num">3</span>Confirm the installation when prompted</div>
+                    <p style="color: #666; margin-top: 15px; font-size: 14px;">For mobile devices, use Safari (iOS) or Chrome (Android) for best results.</p>
+                `;
+            }
+        }
 
         function updateProgress(percent, message) {
             document.getElementById('progress-bar').style.width = percent + '%';
