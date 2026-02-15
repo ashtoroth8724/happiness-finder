@@ -8,33 +8,77 @@
     <meta name="theme-color" content="#005a32">
     <style>
         :root { --brand-green: #005a32; --alert-red: #b30000; --bg: #fdfdfd; }
+        
         body {
             font-family: -apple-system, system-ui, sans-serif;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             height: 100vh; margin: 0; background: var(--bg); color: #333; overflow: hidden; text-align: center;
         }
+
+        /* Progress Bar */
         .progress-container { width: 70%; height: 6px; background: #eee; border-radius: 10px; margin: 20px auto; overflow: hidden; display: none; }
         #progress-bar { width: 0%; height: 100%; background: var(--brand-green); transition: width 0.4s ease; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         .loading { animation: pulse 1.5s infinite; color: #888; font-size: 14px; }
-        #needle {
-            width: 0; height: 0; border-left: 20px solid transparent; border-right: 20px solid transparent;
-            border-bottom: 100px solid var(--brand-green); position: absolute; left: 80px; top: 0;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* FIXED COMPASS NEEDLE */
+        .compass-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 30px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        #needle::after { content: ''; width: 0; height: 0; border-left: 20px solid transparent; border-right: 20px solid transparent; border-top: 100px solid #ccc; position: absolute; left: -20px; top: 100px; }
-        .compass-container { position: relative; width: 200px; height: 200px; margin: 30px auto; }
-        .btn { background: var(--brand-green); color: white; border: none; padding: 18px 40px; border-radius: 50px; font-size: 20px; font-weight: 600; cursor: pointer; }
+        
+        #needle-pivot {
+            position: relative;
+            width: 40px;
+            height: 200px;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            /* This ensures it rotates around its true center point */
+            transform-origin: center center; 
+        }
+
+        #needle-north {
+            width: 0; height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-bottom: 100px solid var(--brand-green);
+        }
+
+        #needle-south {
+            width: 0; height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 100px solid #ccc;
+        }
+
+        /* Buttons & UI */
+        .btn { background: var(--brand-green); color: white; border: none; padding: 18px 40px; border-radius: 50px; font-size: 20px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         #happiness-status { font-size: 24px; font-weight: 700; color: var(--brand-green); }
         #distance { font-size: 18px; color: #666; margin-top: 5px; }
         #hours { font-size: 13px; background: #eee; padding: 6px 12px; border-radius: 12px; margin-top: 15px; display: inline-block; }
+
+        /* Install Modal */
+        #install-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; max-width: 80%; text-align: left; }
+        .close-modal { background: #eee; border: none; padding: 12px; border-radius: 10px; margin-top: 20px; width: 100%; font-weight: bold; }
     </style>
 </head>
 <body>
 
+    <div id="install-modal">
+        <div class="modal-content">
+            <h3 style="margin-top:0; color:var(--brand-green)">Install Happiness</h3>
+            <p id="instruction-text"></p>
+            <button class="close-modal" onclick="closeModal()">Got it!</button>
+        </div>
+    </div>
+
     <div id="ui-init">
-        <h1 style="color:var(--brand-green);">Happiness Finder</h1>
+        <h1 style="color:var(--brand-green); margin-bottom: 30px;">Bolaget Finder</h1>
         <button class="btn" onclick="startApp()">FIND HAPPINESS</button>
     </div>
 
@@ -46,12 +90,41 @@
     <div id="ui-compass" style="display:none;">
         <div id="happiness-status">Happiness found!</div>
         <div id="distance">...</div>
-        <div class="compass-container"><div id="needle"></div></div>
+        <div class="compass-container">
+            <div id="needle-pivot">
+                <div id="needle-north"></div>
+                <div id="needle-south"></div>
+            </div>
+        </div>
         <div id="hours">...</div>
     </div>
 
     <script>
-        let userLoc = null; let nearestStore = null; let smoothedHeading = 0;
+        let userLoc = null; 
+        let nearestStore = null; 
+        let smoothedHeading = 0;
+
+        // PWA Modal Logic
+        window.onload = () => {
+            if (!window.matchMedia('(display-mode: standalone)').matches && !localStorage.getItem('pwa_prompt_dismissed')) {
+                showInstallInstructions();
+            }
+        };
+
+        function showInstallInstructions() {
+            const modal = document.getElementById('install-modal');
+            const text = document.getElementById('instruction-text');
+            const ua = navigator.userAgent.toLowerCase();
+            if (ua.includes('firefox')) text.innerHTML = "1. Tap the <b>three dots (⋮)</b><br>2. Tap <b>Install</b>.";
+            else if (ua.includes('iphone') || ua.includes('ipad')) text.innerHTML = "1. Tap <b>Share</b><br>2. Tap <b>Add to Home Screen</b>.";
+            else text.innerHTML = "1. Tap <b>three dots (⋮)</b><br>2. Select <b>Install app</b>.";
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('install-modal').style.display = 'none';
+            localStorage.setItem('pwa_prompt_dismissed', 'true');
+        }
 
         function setProgress(percent, msg) {
             document.getElementById('progress-bar').style.width = percent + '%';
@@ -67,13 +140,14 @@
                 userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
                 setProgress(60, "Scanning map...");
                 await fetchNearestBolaget(userLoc.lat, userLoc.lng);
-            }, () => alert("GPS failed"), { enableHighAccuracy: true });
+            }, () => alert("GPS failed. Ensure location is on."), { enableHighAccuracy: true });
 
             if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                 const res = await DeviceOrientationEvent.requestPermission();
                 if (res === 'granted') window.addEventListener('deviceorientation', handleOrientation);
             } else {
                 window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                window.addEventListener('deviceorientation', handleOrientation, true);
             }
         }
 
@@ -91,29 +165,34 @@
                     document.getElementById('ui-seeking').style.display = 'none';
                     document.getElementById('ui-compass').style.display = 'block';
                     updateUI(minD);
+                } else {
+                    document.getElementById('status-msg').innerText = "Happiness is > 25km away.";
                 }
-            } catch (e) { alert("Search failed"); }
+            } catch (e) { alert("Network Error"); }
         }
 
         function updateUI(dist) {
             document.getElementById('distance').innerText = `Happiness is ${dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km'} away.`;
             document.getElementById('hours').innerText = `Hours: ${nearestStore.hours}`;
+            if (new Date().getDay() === 0) {
+                document.getElementById('hours').innerText = "Closed (Sunday).";
+                document.getElementById('needle-north').style.borderBottomColor = 'var(--alert-red)';
+            }
         }
 
         function handleOrientation(e) {
             if (!userLoc || !nearestStore) return;
-        
-            // Support for iOS, Chrome Android, AND Firefox Android
+            // Standardizing heading for Chrome, Firefox, and Safari
             let rawHeading = e.webkitCompassHeading || (e.absolute ? e.alpha : (360 - e.alpha));
-            
-            // Smoothing logic (keep this the same)
+            if (rawHeading === undefined) return;
+
             let diff = rawHeading - smoothedHeading;
             if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
-            smoothedHeading += diff * 0.15; 
-        
+            smoothedHeading += diff * 0.15;
+
             const bearing = getBearing(userLoc.lat, userLoc.lng, nearestStore.lat, nearestStore.lon);
-            document.getElementById('needle').style.transform = `rotate(${bearing - smoothedHeading}deg)`;
-}
+            document.getElementById('needle-pivot').style.transform = `rotate(${bearing - smoothedHeading}deg)`;
+        }
 
         function getDistance(lat1, lon1, lat2, lon2) {
             const R = 6371; const dLat = (lat2-lat1)*Math.PI/180; const dLon = (lon2-lon1)*Math.PI/180;
@@ -128,10 +207,7 @@
             return (Math.atan2(y, x)*180/Math.PI + 360) % 360;
         }
 
-        // Register Service Worker
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js');
-        }
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
     </script>
 </body>
 </html>
