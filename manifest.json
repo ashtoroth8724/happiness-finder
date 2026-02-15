@@ -1,0 +1,18 @@
+{
+  "name": "Happiness Finder",
+  "short_name": "Happiness",
+  "description": "Locate the nearest Systembolaget in Sweden.",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#fdfdfd",
+  "theme_color": "#005a32",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/924/924514.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
