@@ -16,7 +16,7 @@
         .loading-text { font-size: 14px; color: #888; letter-spacing: 0.5px; font-weight: 500; }
 
         .compass-container { position: relative; width: 240px; height: 240px; margin: 30px auto; display: flex; align-items: center; justify-content: center; border: 4px solid #eee; border-radius: 50%; }
-        #needle-pivot { position: absolute; width: 40px; height: 200px; transform-origin: center center; display: flex; flex-direction: column; align-items: center; }
+        #needle-pivot { position: absolute; width: 40px; height: 200px; transform-origin: center center; display: flex; flex-direction: column; align-items: center; transition: none; }
         #needle-north { width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-bottom: 100px solid var(--brand-green) !important; }
         #needle-south { width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 100px solid #ccc; }
         
@@ -51,6 +51,7 @@
         let userLoc = null; let nearestStore = null;
         let currentRotation = 0; let targetRotation = 0;
         let integral = 0; let lastError = 0;
+        let geoWatchId = null;
         const Kp = 0.15; const Ki = 0.001; const Kd = 0.45;
 
         function updateProgress(percent, message) {
@@ -84,6 +85,17 @@
                 updateProgress(90, "Tuning PID Controller...");
                 window.addEventListener('deviceorientationabsolute', handleOrientation, true);
                 window.addEventListener('deviceorientation', handleOrientation, true);
+                
+                // Start watching position for continuous distance updates
+                geoWatchId = navigator.geolocation.watchPosition((pos) => {
+                    userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    if (nearestStore) {
+                        const dist = getDistance(userLoc.lat, userLoc.lng, nearestStore.lat, nearestStore.lon);
+                        updateDistanceDisplay(dist);
+                    }
+                }, (err) => {
+                    console.error("GPS watch error: " + err.message);
+                }, { enableHighAccuracy: true });
                 
                 // Final slight delay to show 100% and then reveal compass
                 setTimeout(() => {
@@ -120,8 +132,16 @@
             } catch (e) { alert("Search failed: Network error"); }
         }
 
+        function updateDistanceDisplay(dist) {
+            if (dist < 1) {
+                document.getElementById('distance').innerText = `Happiness is ${(dist * 1000).toFixed(0)}m away.`;
+            } else {
+                document.getElementById('distance').innerText = `Happiness is ${dist.toFixed(1)}km away.`;
+            }
+        }
+
         function updateUI(dist) {
-            document.getElementById('distance').innerText = `Happiness is ${dist.toFixed(1)}km away.`;
+            updateDistanceDisplay(dist);
             document.getElementById('hours').innerText = `Open: ${nearestStore.tags.opening_hours || 'Check store website'}`;
         }
 
