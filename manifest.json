@@ -9,11 +9,12 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://play-lh.googleusercontent.com/bmsubKH3wmUny0Yu_lSYyjBC3xnDOcudUIXX4z4AUseuYixuDZdMbnGYD1VICeitQ3E=w240-h480-rw",
-      "sizes": "512x512",
+      "src": "icon.png",
+      "sizes": "240x240",
       "type": "image/png",
       "purpose": "any maskable"
     }
   ]
 
 }
+
