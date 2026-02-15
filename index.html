@@ -84,7 +84,6 @@
                 
                 updateProgress(90, "Tuning PID Controller...");
                 window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-                window.addEventListener('deviceorientation', handleOrientation, true);
                 
                 // Start watching position for continuous distance updates
                 geoWatchId = navigator.geolocation.watchPosition((pos) => {
