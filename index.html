@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Find Happiness</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#005a32">
+    <style>
+        :root { --brand-green: #005a32; --alert-red: #b30000; --bg: #fdfdfd; }
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; background: var(--bg); color: #333; overflow: hidden; text-align: center;
+        }
+        .progress-container { width: 70%; height: 6px; background: #eee; border-radius: 10px; margin: 20px auto; overflow: hidden; display: none; }
+        #progress-bar { width: 0%; height: 100%; background: var(--brand-green); transition: width 0.4s ease; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .loading { animation: pulse 1.5s infinite; color: #888; font-size: 14px; }
+        #needle {
+            width: 0; height: 0; border-left: 20px solid transparent; border-right: 20px solid transparent;
+            border-bottom: 100px solid var(--brand-green); position: absolute; left: 80px; top: 0;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
+        }
+        #needle::after { content: ''; width: 0; height: 0; border-left: 20px solid transparent; border-right: 20px solid transparent; border-top: 100px solid #ccc; position: absolute; left: -20px; top: 100px; }
+        .compass-container { position: relative; width: 200px; height: 200px; margin: 30px auto; }
+        .btn { background: var(--brand-green); color: white; border: none; padding: 18px 40px; border-radius: 50px; font-size: 20px; font-weight: 600; cursor: pointer; }
+        #happiness-status { font-size: 24px; font-weight: 700; color: var(--brand-green); }
+        #distance { font-size: 18px; color: #666; margin-top: 5px; }
+        #hours { font-size: 13px; background: #eee; padding: 6px 12px; border-radius: 12px; margin-top: 15px; display: inline-block; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-init">
+        <h1 style="color:var(--brand-green);">Happiness Finder</h1>
+        <button class="btn" onclick="startApp()">FIND HAPPINESS</button>
+    </div>
+
+    <div id="ui-seeking" style="display:none;">
+        <div id="status-msg" class="loading">Initializing...</div>
+        <div class="progress-container" style="display:block;"><div id="progress-bar"></div></div>
+    </div>
+
+    <div id="ui-compass" style="display:none;">
+        <div id="happiness-status">Happiness found!</div>
+        <div id="distance">...</div>
+        <div class="compass-container"><div id="needle"></div></div>
+        <div id="hours">...</div>
+    </div>
+
+    <script>
+        let userLoc = null; let nearestStore = null; let smoothedHeading = 0;
+
+        function setProgress(percent, msg) {
+            document.getElementById('progress-bar').style.width = percent + '%';
+            document.getElementById('status-msg').innerText = msg;
+        }
+
+        async function startApp() {
+            document.getElementById('ui-init').style.display = 'none';
+            document.getElementById('ui-seeking').style.display = 'block';
+            setProgress(20, "Locating you...");
+
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                setProgress(60, "Scanning map...");
+                await fetchNearestBolaget(userLoc.lat, userLoc.lng);
+            }, () => alert("GPS failed"), { enableHighAccuracy: true });
+
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                const res = await DeviceOrientationEvent.requestPermission();
+                if (res === 'granted') window.addEventListener('deviceorientation', handleOrientation);
+            } else {
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+            }
+        }
+
+        async function fetchNearestBolaget(lat, lng) {
+            const query = `[out:json];node["shop"="alcohol"]["name"~"Systembolaget"](around:25000,${lat},${lng});out;`;
+            try {
+                const response = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                if (data.elements && data.elements.length > 0) {
+                    let minD = Infinity;
+                    data.elements.forEach(el => {
+                        const d = getDistance(lat, lng, el.lat, el.lon);
+                        if (d < minD) { minD = d; nearestStore = { lat: el.lat, lon: el.lon, hours: el.tags.opening_hours || "Unknown" }; }
+                    });
+                    document.getElementById('ui-seeking').style.display = 'none';
+                    document.getElementById('ui-compass').style.display = 'block';
+                    updateUI(minD);
+                }
+            } catch (e) { alert("Search failed"); }
+        }
+
+        function updateUI(dist) {
+            document.getElementById('distance').innerText = `Happiness is ${dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km'} away.`;
+            document.getElementById('hours').innerText = `Hours: ${nearestStore.hours}`;
+        }
+
+        function handleOrientation(e) {
+            if (!userLoc || !nearestStore) return;
+        
+            // Support for iOS, Chrome Android, AND Firefox Android
+            let rawHeading = e.webkitCompassHeading || (e.absolute ? e.alpha : (360 - e.alpha));
+            
+            // Smoothing logic (keep this the same)
+            let diff = rawHeading - smoothedHeading;
+            if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
+            smoothedHeading += diff * 0.15; 
+        
+            const bearing = getBearing(userLoc.lat, userLoc.lng, nearestStore.lat, nearestStore.lon);
+            document.getElementById('needle').style.transform = `rotate(${bearing - smoothedHeading}deg)`;
+}
+
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; const dLat = (lat2-lat1)*Math.PI/180; const dLon = (lon2-lon1)*Math.PI/180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function getBearing(lat1, lon1, lat2, lon2) {
+            const dLon = (lon2-lon1)*Math.PI/180;
+            const y = Math.sin(dLon)*Math.cos(lat2*Math.PI/180);
+            const x = Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180) - Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLon);
+            return (Math.atan2(y, x)*180/Math.PI + 360) % 360;
+        }
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
