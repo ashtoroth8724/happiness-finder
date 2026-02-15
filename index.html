@@ -8,140 +8,57 @@
     <meta name="theme-color" content="#005a32">
     <style>
         :root { --brand-green: #005a32; --alert-red: #b30000; --bg: #fdfdfd; }
-        
-        body {
-            font-family: -apple-system, system-ui, sans-serif;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; margin: 0; background: var(--bg); color: #333; overflow: hidden; text-align: center;
-        }
-
-        /* Progress UI */
+        body { font-family: -apple-system, system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: var(--bg); color: #333; overflow: hidden; text-align: center; }
         .progress-container { width: 70%; height: 6px; background: #eee; border-radius: 10px; margin: 20px auto; overflow: hidden; display: none; }
         #progress-bar { width: 0%; height: 100%; background: var(--brand-green); transition: width 0.4s ease; }
-        .loading { animation: pulse 1.5s infinite; color: #888; font-size: 14px; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-
-        /* COMPASS NEEDLE */
-        .compass-container {
-            position: relative; width: 240px; height: 240px;
-            margin: 30px auto; display: flex; align-items: center; justify-content: center;
-            border: 4px solid #eee; border-radius: 50%;
-        }
-        
-        #needle-pivot {
-            position: absolute;
-            width: 40px; height: 200px;
-            transition: transform 0.2s ease-out;
-            transform-origin: center center; 
-            display: flex; flex-direction: column; align-items: center;
-            transition: transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
-        }
-
-        #needle-north {
-            width: 0; height: 0;
-            border-left: 15px solid transparent;
-            border-right: 15px solid transparent;
-            /* FORCING GREEN COLOR HERE */
-            border-bottom: 100px solid var(--brand-green) !important;
-        }
-
-        #needle-south {
-            width: 0; height: 0;
-            border-left: 15px solid transparent;
-            border-right: 15px solid transparent;
-            border-top: 100px solid #ccc;
-        }
-
+        .compass-container { position: relative; width: 240px; height: 240px; margin: 30px auto; display: flex; align-items: center; justify-content: center; border: 4px solid #eee; border-radius: 50%; }
+        #needle-pivot { position: absolute; width: 40px; height: 200px; transform-origin: center center; display: flex; flex-direction: column; align-items: center; transition: none; }
+        #needle-north { width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-bottom: 100px solid var(--brand-green) !important; }
+        #needle-south { width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 100px solid #ccc; }
         .btn { background: var(--brand-green); color: white; border: none; padding: 18px 40px; border-radius: 50px; font-size: 20px; font-weight: 600; cursor: pointer; }
         #happiness-status { font-size: 24px; font-weight: 700; color: var(--brand-green); }
         #distance { font-size: 18px; color: #666; margin-top: 5px; }
         #hours { font-size: 13px; background: #eee; padding: 6px 12px; border-radius: 12px; margin-top: 15px; display: inline-block; }
-
-        /* Modal */
-        #install-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
-        .modal-content { background: white; padding: 30px; border-radius: 20px; max-width: 80%; text-align: left; }
-        .close-modal { background: #eee; border: none; padding: 12px; border-radius: 10px; margin-top: 20px; width: 100%; font-weight: bold; }
     </style>
 </head>
 <body>
-
-    <div id="install-modal">
-        <div class="modal-content">
-            <h3 style="margin-top:0; color:var(--brand-green)">Install Happiness</h3>
-            <p id="instruction-text"></p>
-            <button class="close-modal" onclick="closeModal()">Got it!</button>
-        </div>
-    </div>
-
     <div id="ui-init">
         <h1 style="color:var(--brand-green); margin-bottom: 30px;">Bolaget Finder</h1>
         <button class="btn" onclick="startApp()">FIND HAPPINESS</button>
     </div>
-
     <div id="ui-seeking" style="display:none;">
-        <div id="status-msg" class="loading">Initializing...</div>
+        <div id="status-msg" style="color:#888;">Locating you...</div>
         <div class="progress-container" style="display:block;"><div id="progress-bar"></div></div>
     </div>
-
     <div id="ui-compass" style="display:none;">
         <div id="happiness-status">Happiness found!</div>
         <div id="distance">...</div>
         <div class="compass-container">
-            <div id="needle-pivot">
-                <div id="needle-north"></div>
-                <div id="needle-south"></div>
-            </div>
+            <div id="needle-pivot"><div id="needle-north"></div><div id="needle-south"></div></div>
         </div>
         <div id="hours">...</div>
     </div>
 
     <script>
-        let userLoc = null; 
-        let nearestStore = null; 
-        let smoothedHeading = 0;
-
-        // INSTALL MODAL LOGIC
-        window.onload = () => {
-            if (!window.matchMedia('(display-mode: standalone)').matches && !localStorage.getItem('pwa_prompt_dismissed')) {
-                showInstallInstructions();
-            }
-        };
-
-        function showInstallInstructions() {
-            const modal = document.getElementById('install-modal');
-            const text = document.getElementById('instruction-text');
-            const ua = navigator.userAgent.toLowerCase();
-            if (ua.includes('firefox')) text.innerHTML = "1. Tap the <b>three dots (⋮)</b><br>2. Tap <b>Install</b>.";
-            else if (ua.includes('iphone') || ua.includes('ipad')) text.innerHTML = "1. Tap <b>Share</b><br>2. Tap <b>Add to Home Screen</b>.";
-            else text.innerHTML = "1. Tap <b>three dots (⋮)</b><br>2. Select <b>Install app</b>.";
-            modal.style.display = 'flex';
-        }
-
-        function closeModal() {
-            document.getElementById('install-modal').style.display = 'none';
-            localStorage.setItem('pwa_prompt_dismissed', 'true');
-        }
+        let userLoc = null; let nearestStore = null;
+        let currentRotation = 0; let targetRotation = 0;
+        let integral = 0; let lastError = 0;
+        const Kp = 0.15; const Ki = 0.001; const Kd = 0.45;
 
         async function startApp() {
             document.getElementById('ui-init').style.display = 'none';
             document.getElementById('ui-seeking').style.display = 'block';
-            document.getElementById('progress-bar').style.width = '20%';
-            document.getElementById('status-msg').innerText = "Locating you...";
-
             navigator.geolocation.getCurrentPosition(async (pos) => {
                 userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                document.getElementById('progress-bar').style.width = '60%';
-                document.getElementById('status-msg').innerText = "Scanning map...";
                 await fetchNearestBolaget(userLoc.lat, userLoc.lng);
-            }, () => alert("GPS failed. Ensure location is on."), { enableHighAccuracy: true });
+                requestAnimationFrame(pidLoop);
+            }, () => alert("GPS error"), { enableHighAccuracy: true });
 
             if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                 const res = await DeviceOrientationEvent.requestPermission();
                 if (res === 'granted') window.addEventListener('deviceorientation', handleOrientation);
             } else {
                 window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-                // Also listen for regular orientation as fallback
-                window.addEventListener('deviceorientation', handleOrientation, true);
             }
         }
 
@@ -150,69 +67,41 @@
             try {
                 const response = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
                 const data = await response.json();
-                if (data.elements && data.elements.length > 0) {
+                if (data.elements.length > 0) {
                     let minD = Infinity;
                     data.elements.forEach(el => {
                         const d = getDistance(lat, lng, el.lat, el.lon);
-                        if (d < minD) { minD = d; nearestStore = { lat: el.lat, lon: el.lon, hours: el.tags.opening_hours || "Unknown" }; }
+                        if (d < minD) { minD = d; nearestStore = el; }
                     });
                     document.getElementById('ui-seeking').style.display = 'none';
                     document.getElementById('ui-compass').style.display = 'block';
                     updateUI(minD);
-                } else {
-                    document.getElementById('status-msg').innerText = "Happiness is > 25km away.";
                 }
-            } catch (e) { alert("Network Error"); }
+            } catch (e) { alert("Search failed"); }
         }
 
         function updateUI(dist) {
-            document.getElementById('distance').innerText = `Happiness is ${dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km'} away.`;
-            document.getElementById('hours').innerText = `Hours: ${nearestStore.hours}`;
-            
-            // Check if Sunday - only change color IF it is actually Sunday
-            if (new Date().getDay() === 0) {
-                document.getElementById('hours').innerText = "Closed (Sunday).";
-                document.getElementById('hours').style.color = 'var(--alert-red)';
-                document.getElementById('needle-north').style.setProperty('border-bottom-color', 'var(--alert-red)', 'important');
-            }
+            document.getElementById('distance').innerText = `Happiness is ${dist.toFixed(1)}km away.`;
+            document.getElementById('hours').innerText = `Open: ${nearestStore.tags.opening_hours || 'Unknown'}`;
         }
-
-        let lastAppliedRotation = 0;
 
         function handleOrientation(e) {
             if (!userLoc || !nearestStore) return;
-            
-            // 1. Get the raw heading based on device type
-            let heading = 0;
-            if (e.webkitCompassHeading) {
-                heading = e.webkitCompassHeading; 
-            } else if (e.absolute && e.alpha !== null) {
-                heading = 360 - e.alpha; 
-            } else if (e.alpha !== null) {
-                heading = 360 - e.alpha;
-            }
-
-            // 2. Calculate the shortest path (to prevent the needle spinning 360 degrees)
-            let diff = heading - smoothedHeading;
-            if (diff > 180) diff -= 360; 
-            if (diff < -180) diff += 360;
-
-            // 3. LOW-PASS FILTER: We only take 5% of the new data (0.05)
-            // This makes the needle move like it's in thick honey.
-            smoothedHeading += diff * 0.05; 
-
-            // 4. Calculate bearing to destination
+            let heading = e.webkitCompassHeading || (e.absolute ? 360 - e.alpha : 360 - e.alpha);
             const bearing = getBearing(userLoc.lat, userLoc.lng, nearestStore.lat, nearestStore.lon);
-            
-            // 5. Calculate final rotation
-            let targetRotation = bearing - smoothedHeading;
+            targetRotation = bearing - heading;
+        }
 
-            // 6. SNAP FILTER: Only update the CSS if the change is noticeable (> 1.5 degrees)
-            // This stops the "vibrating" look when you are standing still.
-            if (Math.abs(targetRotation - lastAppliedRotation) > 1.5) {
-                document.getElementById('needle-pivot').style.transform = `rotate(${targetRotation}deg)`;
-                lastAppliedRotation = targetRotation;
-            }
+        function pidLoop() {
+            let error = targetRotation - currentRotation;
+            while (error <= -180) error += 360; while (error > 180) error -= 360;
+            integral = (integral + error) * 0.9; // Small decay to prevent integral windup
+            let derivative = error - lastError;
+            let output = (Kp * error) + (Ki * integral) + (Kd * derivative);
+            currentRotation += output;
+            document.getElementById('needle-pivot').style.transform = `rotate(${currentRotation}deg)`;
+            lastError = error;
+            requestAnimationFrame(pidLoop);
         }
 
         function getDistance(lat1, lon1, lat2, lon2) {
@@ -227,8 +116,6 @@
             const x = Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180) - Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLon);
             return (Math.atan2(y, x)*180/Math.PI + 360) % 360;
         }
-
-        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
     </script>
 </body>
 </html>
